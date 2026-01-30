@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // Wajib untuk State Management
+import 'package:provider/provider.dart';
 import 'package:ebook_safira/screens/book_details_screen.dart';
 import 'package:ebook_safira/screens/author_profile_screen.dart';
-import '../providers/book_provider.dart'; // Import Provider yang kita buat sebelumnya
+import 'package:ebook_safira/screens/edit_book_screen.dart';
+import '../providers/book_provider.dart';
+import '../models/book_model.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,30 +14,68 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
-    // Mengambil data dari Supabase via Provider saat layar pertama kali dimuat
-    // listen: false wajib di dalam initState
+    // Mengambil data awal dari Supabase
     Future.microtask(
       () => Provider.of<BookProvider>(context, listen: false).fetchBooks(),
     );
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _showDeleteDialog(
+    BuildContext context,
+    BookProvider provider,
+    String id,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Hapus Buku?"),
+        content: const Text("Apakah Anda yakin ingin menghapus buku ini?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Batal"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await provider.deleteBook(id);
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text("Hapus", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Mengamati perubahan data pada BookProvider
     final bookProvider = context.watch<BookProvider>();
+    final books = bookProvider.books;
 
     return Scaffold(
+      // FAB SUDAH DIHAPUS DARI SINI KARENA SUDAH PINDAH KE MAIN_SCREEN
       body: RefreshIndicator(
-        // Fitur tarik ke bawah untuk refresh data (Opsional tapi bagus untuk nilai)
         onRefresh: () => bookProvider.fetchBooks(),
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              const SizedBox(
+                height: 10,
+              ), // Tambahan jarak atas agar tidak terlalu mepet
               const Text(
                 'HOME',
                 style: TextStyle(
@@ -44,51 +84,83 @@ class _HomeScreenState extends State<HomeScreen> {
                   letterSpacing: 1.5,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
 
-              // 1. Popular Authors (Tetap Statis tidak apa-apa sebagai variasi)
+              // Search Bar (Tetap di sini sebagai identitas Home)
+              TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  bookProvider.searchBooks(value);
+                },
+                decoration: InputDecoration(
+                  hintText: "Search a book in the library",
+                  prefixIcon: const Icon(Icons.search, color: Colors.brown),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            bookProvider.searchBooks('');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                ),
+              ),
+              const SizedBox(height: 25),
+
               const Text(
                 'Popular Authors',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               _buildAuthorList(),
-
               const SizedBox(height: 30),
 
-              // 2. New Books (Dinamis dari Supabase via Provider)
               const Text(
                 'New Books (Supabase)',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
 
-              // Menampilkan Loading jika data sedang diambil
-              bookProvider.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : bookProvider.books.isEmpty
-                  ? const Text("Tidak ada data buku.")
-                  : SizedBox(
-                      height: 280,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: bookProvider.books.length,
-                        itemBuilder: (context, index) {
-                          final book = bookProvider.books[index];
-                          return _buildBookCard(context, book);
-                        },
-                      ),
-                    ),
+              if (bookProvider.isLoading)
+                const Center(
+                  child: CircularProgressIndicator(color: Colors.brown),
+                )
+              else if (books.isEmpty)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text("Buku tidak ditemukan."),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 280,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: books.length,
+                    itemBuilder: (context, index) {
+                      return _buildBookCard(context, books[index]);
+                    },
+                  ),
+                ),
 
               const SizedBox(height: 30),
-
-              // 3. Recommended Books (Bisa menggunakan data yang sama)
               const Text(
                 'Recommended Books',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
-              _buildRecommendedList(bookProvider),
+
+              if (!bookProvider.isLoading)
+                _buildRecommendedList(bookProvider, books),
             ],
           ),
         ),
@@ -96,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Widget Helper untuk Author
+  // --- WIDGET HELPER: AUTHOR LIST ---
   Widget _buildAuthorList() {
     final List<Map<String, String>> authors = [
       {'name': 'Raditya Dika', 'image': 'assets/images/radityadika.jpeg'},
@@ -148,8 +220,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Widget Helper untuk Card Buku (Data dari Model)
-  Widget _buildBookCard(BuildContext context, dynamic book) {
+  // --- WIDGET HELPER: BOOK CARD (HORIZONTAL) ---
+  Widget _buildBookCard(BuildContext context, Book book) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -157,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
           MaterialPageRoute(
             builder: (context) => BookDetailsScreen(
               title: book.title,
-              coverAsset: book.imageUrl ?? '',
+              coverAsset: book.imageUrl ?? 'assets/images/bintang.jpg',
             ),
           ),
         );
@@ -169,20 +241,27 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                book.imageUrl ?? 'https://via.placeholder.com/150',
+              child: Image.asset(
+                book.imageUrl ?? 'assets/images/bintang.jpg',
                 width: 150,
                 height: 205,
                 fit: BoxFit.cover,
-                // Fallback jika gambar URL gagal dimuat
-                errorBuilder: (context, error, stackTrace) =>
-                    Container(width: 150, height: 205, color: Colors.grey),
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 150,
+                  height: 205,
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.book, size: 50, color: Colors.grey),
+                ),
               ),
             ),
             const SizedBox(height: 5),
-            Text(
-              book.title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            SizedBox(
+              width: 150,
+              child: Text(
+                book.title,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             Text(
               book.author,
@@ -194,23 +273,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Widget Helper untuk Recommended List
-  Widget _buildRecommendedList(BookProvider provider) {
+  // --- WIDGET HELPER: RECOMMENDED LIST (VERTICAL) ---
+  Widget _buildRecommendedList(BookProvider provider, List<Book> books) {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: provider.books.length,
+      itemCount: books.length,
       itemBuilder: (context, index) {
-        final book = provider.books[index];
+        final book = books[index];
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(5),
-            child: Image.network(
-              book.imageUrl ?? 'https://via.placeholder.com/60',
+            child: Image.asset(
+              book.imageUrl ?? 'assets/images/bintang.jpg',
               width: 60,
               height: 90,
               fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  Container(width: 60, height: 90, color: Colors.grey[300]),
             ),
           ),
           title: Text(
@@ -218,17 +299,26 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           subtitle: Text(book.author),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => BookDetailsScreen(
-                  title: book.title,
-                  coverAsset: book.imageUrl ?? '',
-                ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditBookScreen(book: book),
+                    ),
+                  );
+                },
               ),
-            );
-          },
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _showDeleteDialog(context, provider, book.id),
+              ),
+            ],
+          ),
         );
       },
     );

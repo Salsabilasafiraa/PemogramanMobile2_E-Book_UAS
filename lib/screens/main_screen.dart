@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
-import 'explore_screen.dart';
+import 'add_book_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
 
@@ -14,10 +14,10 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  // Daftar semua halaman
+  // Urutan halaman sesuai urutan tombol di bawah
   final List<Widget> _widgetOptions = <Widget>[
     const HomeScreen(),
-    const ExploreScreen(),
+    const AddBookScreen(),
     const NotificationsScreen(),
     const ProfileScreen(),
   ];
@@ -28,74 +28,37 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-  // Widget untuk Header (Search Bar & Avatar) yang konsisten di semua layar
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      title: const Text(
-        '9:41',
-        style: TextStyle(fontSize: 15),
-      ), // Placeholder waktu
-      actions: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 100.0, right: 10.0),
-            child: Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(left: 10.0),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search a book in the library',
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const CircleAvatar(
-          radius: 15,
-          backgroundColor: Colors.blueGrey,
-          child: Icon(Icons.person, color: Colors.white, size: 18),
-        ),
-        const SizedBox(width: 16.0),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _buildAppBar(),
-
-      // Body menampilkan halaman yang dipilih
-      body: _widgetOptions.elementAt(_selectedIndex),
+      // SafeArea memastikan konten tidak tertutup notch atau status bar
+      body: SafeArea(child: _widgetOptions.elementAt(_selectedIndex)),
 
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFFFFFBE5), // Latar belakang kuning muda
-        selectedItemColor: Colors.black,
+        type: BottomNavigationBarType
+            .fixed, // Penting agar lebih dari 3 item tetap rapi
+        backgroundColor: const Color(0xFFFFFBE5),
+        selectedItemColor: const Color(0xFF8D6E63),
         unselectedItemColor: Colors.grey,
-
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-
+        selectedFontSize: 12, // Mengunci ukuran font agar seragam
+        unselectedFontSize: 12,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: 'Explore'),
+          BottomNavigationBarItem(
+            icon: CircleAvatar(
+              radius: 18, // Sedikit diperkecil agar pas dengan teks
+              backgroundColor: Color(0xFF8D6E63),
+              child: Icon(Icons.add, color: Colors.white, size: 20),
+            ),
+            label: 'Tambah',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.notifications),
-            label: 'Notifications',
+            label: 'Notifikasi',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );
